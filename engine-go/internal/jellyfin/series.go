@@ -29,6 +29,7 @@ type seriesItem struct {
 	ProductionYear int32
 	Seasons        map[string]SeasonItem
 	TMDBId         string
+	NativeOverview string
 }
 
 type NewlyAddedSeriesItem struct {
@@ -39,6 +40,7 @@ type NewlyAddedSeriesItem struct {
 	TMDBId         string
 	ProductionYear int
 	AdditionDate   time.Time
+	NativeOverview string
 	Overview       string // Will be populated with tmdb
 	PosterURL      string // Will be populated with tmdb
 }
@@ -79,6 +81,7 @@ func parseSeriesItems(
 				ProductionYear: OrDefault(item.ProductionYear, 0),
 				Seasons:        map[string]SeasonItem{},
 				TMDBId:         getTMDBIDIfExist(&item),
+				NativeOverview: OrDefault(item.Overview, ""),
 			}
 			if seriesItems[*item.Id].AdditionDate.Equal(time.Date(1970, 01, 01, 00, 00, 00, 00, time.UTC)) {
 				app.Logger.Warn(
@@ -98,7 +101,7 @@ func parseSeriesItems(
 // If a season lacks an addition date the function emits a warning.
 func updateSeriesWithSeasons(
 	jellyfinItems *[]jellyfinAPI.BaseItemDto,
-	seriesItem map[string]seriesItem,
+	seriesMap map[string]seriesItem,
 	excludedSeriesIDs map[string]struct{},
 	app *app.ApplicationContext,
 ) {
@@ -120,7 +123,7 @@ func updateSeriesWithSeasons(
 				SeasonNumber: OrDefault(item.IndexNumber, 0),
 				Episodes:     map[string]EpisodeItem{},
 			}
-			if _, ok := seriesItem[*item.SeriesId.Get()]; !ok {
+			if _, ok := seriesMap[*item.SeriesId.Get()]; !ok {
 				app.Logger.Warn(
 					"A season item is ignored because it belongs to a Series that doesn't exist in Jellyfin's API response.",
 					zap.String("Season ID", *item.Id),
@@ -139,7 +142,7 @@ func updateSeriesWithSeasons(
 					zap.String("Series ID", *item.SeriesId.Get()),
 				)
 			}
-			seriesItem[*item.SeriesId.Get()].Seasons[*item.Id] = seasonItem
+			seriesMap[*item.SeriesId.Get()].Seasons[*item.Id] = seasonItem
 		}
 	}
 }
@@ -177,10 +180,10 @@ func isEpisodeExcluded(
 
 func attachEpisodeToSeries(
 	item *jellyfinAPI.BaseItemDto,
-	seriesItem map[string]seriesItem,
+	seriesMap map[string]seriesItem,
 	app *app.ApplicationContext,
 ) {
-	series, ok := seriesItem[*item.SeriesId.Get()]
+	series, ok := seriesMap[*item.SeriesId.Get()]
 	if !ok {
 		app.Logger.Warn(
 			"An episode item is ignored because it belongs to a Series that doesn't exist in Jellyfin's API response.",
@@ -229,7 +232,7 @@ func attachEpisodeToSeries(
 // also produce warnings because they affect new-content detection.
 func updateSeriesWithEpisode(
 	jellyfinItems *[]jellyfinAPI.BaseItemDto,
-	seriesItem map[string]seriesItem,
+	seriesMap map[string]seriesItem,
 	excludedSeriesIDs map[string]struct{},
 	app *app.ApplicationContext,
 ) {
@@ -253,7 +256,7 @@ func updateSeriesWithEpisode(
 		if isEpisodeExcluded(&item, excludedSeriesIDs, app) {
 			continue
 		}
-		attachEpisodeToSeries(&item, seriesItem, app)
+		attachEpisodeToSeries(&item, seriesMap, app)
 	}
 }
 
@@ -344,6 +347,7 @@ func (client *APIClient) createNewlyAddedSeriesItem(
 		TMDBId:         series.TMDBId,
 		ProductionYear: int(series.ProductionYear),
 		AdditionDate:   series.AdditionDate,
+		NativeOverview: series.NativeOverview,
 	}
 
 	newSeries.NewSeasons = client.findNewSeasons(series.Seasons, minimumAdditionDate)
@@ -458,9 +462,15 @@ func (client *APIClient) GetNewlyAddedSeries(
 		}
 	}
 	app.Logger.Debug("Searching for newly added series ...", zap.Time("minimum addition date", minimumAdditionDate))
+	seenIDs := make(map[string]bool)
 	for _, folderName := range app.Config.Jellyfin.WatchedSeriesFolders {
 		if items, err := client.getNewlyAddedSeriesByFolder(minimumAdditionDate, folderName, app); err == nil {
-			seriesItems = append(seriesItems, *items...)
+			for _, item := range *items {
+				if !seenIDs[item.SeriesID] {
+					seenIDs[item.SeriesID] = true
+					seriesItems = append(seriesItems, item)
+				}
+			}
 		}
 	}
 	return &seriesItems

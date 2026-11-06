@@ -8,8 +8,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const jellyfinIDLength = 32
+
 type libraryItemAPI struct {
 	jellyfinAPI.LibraryAPI
+
+	structureAPI jellyfinAPI.LibraryStructureAPI
 }
 
 type Nullable[T any] interface {
@@ -24,7 +28,7 @@ func itemFieldsWithExclusions(
 	if app != nil &&
 		app.Config != nil &&
 		(len(app.Config.Jellyfin.ExcludedPaths) > 0 || len(app.Config.Jellyfin.ExcludedGenres) > 0) {
-		return append(baseFields, "Path", "Genres", "Tags")
+		return append(baseFields, "Path", "Genres", "Tags", "Overview")
 	}
 	return baseFields
 }
@@ -117,6 +121,38 @@ func (libraryAPI libraryItemAPI) GetAllItemsByFolderID(
 	return &items.Items, nil
 }
 
+func findFileSystemFolderID(foldersItems *jellyfinAPI.BaseItemDtoQueryResult, folderName string) string {
+	if !foldersItems.HasItems() {
+		return ""
+	}
+	for _, item := range foldersItems.GetItems() {
+		if (item.Name.IsSet() && item.Name.Get() != nil && *item.Name.Get() == folderName) ||
+			(item.Id != nil && *item.Id == folderName) {
+			return *item.Id
+		}
+	}
+	return ""
+}
+
+func (libraryAPI libraryItemAPI) findVirtualFolderID(folderName string) string {
+	if libraryAPI.structureAPI == nil {
+		return ""
+	}
+	vFolders, vResp, vErr := libraryAPI.structureAPI.GetVirtualFolders(context.Background()).Execute()
+	if vErr != nil || vResp == nil {
+		return ""
+	}
+	defer vResp.Body.Close()
+	for _, vf := range vFolders {
+		if vf.GetName() == folderName || vf.GetItemId() == folderName {
+			if vf.GetItemId() != "" {
+				return vf.GetItemId()
+			}
+		}
+	}
+	return ""
+}
+
 func (libraryAPI libraryItemAPI) GetRootFolderIDByName(folderName string, app *app.ApplicationContext) (string, error) {
 	foldersItems, httpResponse, httpErr := libraryAPI.GetItems(context.Background()).
 		Recursive(false).
@@ -127,20 +163,18 @@ func (libraryAPI libraryItemAPI) GetRootFolderIDByName(folderName string, app *a
 	if err != nil {
 		return "", err
 	}
-
 	defer httpResponse.Body.Close()
 
-	if !foldersItems.HasItems() {
-		app.Logger.Warn(
-			"No folders found. This could happen if Jellyfin has no collection or folder at all. Media should belong in folders but none are found.",
-		)
-		return "", ErrItemsNotFound
+	if id := findFileSystemFolderID(foldersItems, folderName); id != "" {
+		return id, nil
 	}
-	for _, item := range foldersItems.GetItems() {
-		if *item.Name.Get() == folderName {
-			return *item.Id, nil
-		}
+	if id := libraryAPI.findVirtualFolderID(folderName); id != "" {
+		return id, nil
 	}
+	if len(folderName) == jellyfinIDLength {
+		return folderName, nil
+	}
+
 	app.Logger.Warn("Folder not found. Will ignore it.", zap.String("folderName", folderName))
 	return "", ErrItemsNotFound
 }

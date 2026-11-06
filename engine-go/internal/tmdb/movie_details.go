@@ -1,6 +1,9 @@
 package tmdb
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/SeaweedbrainCY/jellyfin-newsletter/internal/app"
 	"github.com/SeaweedbrainCY/jellyfin-newsletter/internal/jellyfin"
 	"go.uber.org/zap"
@@ -12,11 +15,42 @@ func enrichMovieWithDefaultInfos(jellyfinSeriesItem *jellyfin.MovieItem) {
 	jellyfinSeriesItem.PosterURL = defaultDetails.PosterURL
 }
 
+func getJellyfinBaseURL(app *app.ApplicationContext) string {
+	if app == nil || app.Config == nil {
+		return ""
+	}
+	if app.Config.EmailTemplate.JellyfinURL != "" {
+		return app.Config.EmailTemplate.JellyfinURL
+	}
+	return app.Config.Jellyfin.URL
+}
+
+func applyJellyfinFallbackMovie(
+	jellyfinMovieItem *jellyfin.MovieItem,
+	app *app.ApplicationContext,
+) {
+	baseURL := getJellyfinBaseURL(app)
+	isPlaceholder := jellyfinMovieItem.PosterURL == "" || jellyfinMovieItem.PosterURL == "https://placehold.co/200"
+	if isPlaceholder && baseURL != "" && jellyfinMovieItem.ID != "" {
+		jellyfinMovieItem.PosterURL = fmt.Sprintf(
+			"%s/Items/%s/Images/Primary",
+			strings.TrimRight(baseURL, "/"),
+			jellyfinMovieItem.ID,
+		)
+	}
+	if (jellyfinMovieItem.Overview == "" || jellyfinMovieItem.Overview == "No description available.") &&
+		jellyfinMovieItem.NativeOverview != "" {
+		jellyfinMovieItem.Overview = jellyfinMovieItem.NativeOverview
+	}
+}
+
 func EnrichMovieItem(
 	jellyfinMovieItem *jellyfin.MovieItem,
 	tmdbAPIClient APIInterface,
 	app *app.ApplicationContext,
 ) {
+	defer applyJellyfinFallbackMovie(jellyfinMovieItem, app)
+
 	if jellyfinMovieItem.TMDBId != "" {
 		parsedHTTPResponse, err := tmdbAPIClient.GetMediaByID(jellyfinMovieItem.TMDBId, MediaTypeMovie)
 

@@ -14,6 +14,7 @@ type MovieItem struct {
 	AdditionDate   *time.Time
 	TMDBId         string
 	ProductionYear int32
+	NativeOverview string
 	Overview       string // Will be populated with tmdb
 	PosterURL      string // Will be populated with tmdb
 }
@@ -37,9 +38,15 @@ func (client *APIClient) GetRecentlyAddedMovies(app *app.ApplicationContext) *[]
 	}
 	app.Logger.Debug("Searching for newly added movies ...", zap.Time("minimum addition date", minimumAdditionDate))
 	var movieItems = []MovieItem{}
+	seenIDs := make(map[string]bool)
 	for _, folderName := range app.Config.Jellyfin.WatchedFilmFolders {
 		if items, err := client.getRecentlyAddedMoviesByFolder(minimumAdditionDate, folderName, app); err == nil {
-			movieItems = append(movieItems, items...)
+			for _, item := range items {
+				if !seenIDs[item.ID] {
+					seenIDs[item.ID] = true
+					movieItems = append(movieItems, item)
+				}
+			}
 		}
 	}
 	return &movieItems
@@ -108,6 +115,7 @@ func (client *APIClient) getRecentlyAddedMoviesByFolder(
 				Name:           name,
 				TMDBId:         tmdbID,
 				ProductionYear: productionYear,
+				NativeOverview: OrDefault(movie.Overview, ""),
 			})
 		}
 	}

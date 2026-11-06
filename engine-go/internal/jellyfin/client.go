@@ -43,7 +43,8 @@ func NewJellyfinAPIClient(httpClient *http.Client, app *app.ApplicationContext) 
 			client.SystemAPI,
 		},
 		LibraryAPI: libraryItemAPI{
-			client.LibraryAPI,
+			LibraryAPI:   client.LibraryAPI,
+			structureAPI: client.LibraryStructureAPI,
 		},
 	}
 }

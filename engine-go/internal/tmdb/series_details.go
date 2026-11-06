@@ -1,6 +1,9 @@
 package tmdb
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/SeaweedbrainCY/jellyfin-newsletter/internal/app"
 	"github.com/SeaweedbrainCY/jellyfin-newsletter/internal/jellyfin"
 	"go.uber.org/zap"
@@ -12,11 +15,32 @@ func enrichSeriesItemWithDefaultInfos(jellyfinSeriesItem *jellyfin.NewlyAddedSer
 	jellyfinSeriesItem.PosterURL = defaultDetails.PosterURL
 }
 
+func applyJellyfinFallbackSeries(
+	jellyfinSeriesItem *jellyfin.NewlyAddedSeriesItem,
+	app *app.ApplicationContext,
+) {
+	baseURL := getJellyfinBaseURL(app)
+	isPlaceholder := jellyfinSeriesItem.PosterURL == "" || jellyfinSeriesItem.PosterURL == "https://placehold.co/200"
+	if isPlaceholder && baseURL != "" && jellyfinSeriesItem.SeriesID != "" {
+		jellyfinSeriesItem.PosterURL = fmt.Sprintf(
+			"%s/Items/%s/Images/Primary",
+			strings.TrimRight(baseURL, "/"),
+			jellyfinSeriesItem.SeriesID,
+		)
+	}
+	if (jellyfinSeriesItem.Overview == "" || jellyfinSeriesItem.Overview == "No description available.") &&
+		jellyfinSeriesItem.NativeOverview != "" {
+		jellyfinSeriesItem.Overview = jellyfinSeriesItem.NativeOverview
+	}
+}
+
 func EnrichSeriesItem(
 	jellyfinSeriesItem *jellyfin.NewlyAddedSeriesItem,
 	tmdbAPIClient APIInterface,
 	app *app.ApplicationContext,
 ) {
+	defer applyJellyfinFallbackSeries(jellyfinSeriesItem, app)
+
 	if jellyfinSeriesItem.TMDBId != "" {
 		parsedHTTPResponse, err := tmdbAPIClient.GetMediaByID(jellyfinSeriesItem.TMDBId, MediaTypeSeries)
 
