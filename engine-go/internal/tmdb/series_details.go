@@ -20,7 +20,7 @@ func applyJellyfinFallbackSeries(
 	app *app.ApplicationContext,
 ) {
 	baseURL := getJellyfinBaseURL(app)
-	isPlaceholder := jellyfinSeriesItem.PosterURL == "" || jellyfinSeriesItem.PosterURL == "https://placehold.co/200"
+	isPlaceholder := jellyfinSeriesItem.PosterURL == "" || jellyfinSeriesItem.PosterURL == DefaultPosterURL
 	if isPlaceholder && baseURL != "" && jellyfinSeriesItem.SeriesID != "" {
 		jellyfinSeriesItem.PosterURL = fmt.Sprintf(
 			"%s/Items/%s/Images/Primary",
@@ -28,7 +28,7 @@ func applyJellyfinFallbackSeries(
 			jellyfinSeriesItem.SeriesID,
 		)
 	}
-	if (jellyfinSeriesItem.Overview == "" || jellyfinSeriesItem.Overview == "No description available.") &&
+	if (jellyfinSeriesItem.Overview == "" || jellyfinSeriesItem.Overview == DefaultOverview) &&
 		jellyfinSeriesItem.NativeOverview != "" {
 		jellyfinSeriesItem.Overview = jellyfinSeriesItem.NativeOverview
 	}

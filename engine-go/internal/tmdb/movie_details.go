@@ -30,7 +30,7 @@ func applyJellyfinFallbackMovie(
 	app *app.ApplicationContext,
 ) {
 	baseURL := getJellyfinBaseURL(app)
-	isPlaceholder := jellyfinMovieItem.PosterURL == "" || jellyfinMovieItem.PosterURL == "https://placehold.co/200"
+	isPlaceholder := jellyfinMovieItem.PosterURL == "" || jellyfinMovieItem.PosterURL == DefaultPosterURL
 	if isPlaceholder && baseURL != "" && jellyfinMovieItem.ID != "" {
 		jellyfinMovieItem.PosterURL = fmt.Sprintf(
 			"%s/Items/%s/Images/Primary",
@@ -38,7 +38,7 @@ func applyJellyfinFallbackMovie(
 			jellyfinMovieItem.ID,
 		)
 	}
-	if (jellyfinMovieItem.Overview == "" || jellyfinMovieItem.Overview == "No description available.") &&
+	if (jellyfinMovieItem.Overview == "" || jellyfinMovieItem.Overview == DefaultOverview) &&
 		jellyfinMovieItem.NativeOverview != "" {
 		jellyfinMovieItem.Overview = jellyfinMovieItem.NativeOverview
 	}

@@ -1,5 +1,10 @@
 package tmdb
 
+const (
+	DefaultOverview  = "No description available."
+	DefaultPosterURL = "https://placehold.co/200"
+)
+
 type ItemDetails struct {
 	Overview  string
 	PosterURL string
@@ -7,8 +12,8 @@ type ItemDetails struct {
 
 func getDefaultItemDetails() *ItemDetails {
 	return &ItemDetails{
-		Overview:  "No description available.",
-		PosterURL: "https://placehold.co/200",
+		Overview:  DefaultOverview,
+		PosterURL: DefaultPosterURL,
 	}
 }
 
